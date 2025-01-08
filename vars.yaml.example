@@ -1,0 +1,15 @@
+# Список авторизованных пользователей (если требуется для других плагинов)
+AUTHORIZED_USERS:
+- 123456790
+- 98765421
+
+# Конфигурация базы данных MongoDB
+mongodb_uri: "mongodb://localhost:27017/"
+db_name: "JunkyDB"
+
+# Ollama настройки
+ollama_host: "http://127.0.0.1:11434"
+summary_model: "llama3"
+
+# ID канала для логирования
+logchannel: -100223344556677
