@@ -15,7 +15,7 @@ API_HASH = CONFIG.get("API_HASH") or os.getenv("API_HASH")
 
 AUTHORIZED_USERS = CONFIG.get("AUTHORIZED_USERS", [])
 OLLAMA_HOST = CONFIG.get("ollama_host", "http://127.0.0.1:11434")
-SUMMARY_MODEL = CONFIG.get("summary_model", "llama3")
+SUMMARY_MODEL = CONFIG.get("summary_model", "tinyllama")
 LOGCHANNEL = CONFIG.get("logchannel")
 
 MONGODB_URI = CONFIG.get("mongodb_uri", "mongodb://localhost:27017/")
