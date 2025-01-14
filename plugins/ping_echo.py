@@ -1,25 +1,35 @@
-import time
-import random
 import re
 import logging
+import random
 from telethon import events
+from pymongo import MongoClient
+from utils.config import MONGODB_URI, DB_NAME
 from utils.misc import register_help
 
 logger = logging.getLogger(__name__)
 
 def init(client):
+    # Инициализируем подключение к MongoDB
+    mongo_client = MongoClient(MONGODB_URI)
+    db = mongo_client[DB_NAME]
+    jokes_col = db["jokes"]
+
     @client.on(events.NewMessage(pattern=re.compile(r"(?i)^джанки,\s*голос\s*$")))
     async def voice_handler(event):
-        answers = [
-            "Да кто спрашивает?",
-            "Голос? Вот тебе голос.",
-            "Ладно, ты победил. Голос активирован.",
-            "Гав тебя по яйцам. Удовлетворён?",
-        ]
-        msg = answers[int(time.time()) % len(answers)]
+        try:
+            # Получаем все шутки из коллекции и выбираем случайную
+            jokes = list(jokes_col.find({}))
+            if jokes:
+                chosen_joke = random.choice(jokes)
+                msg = chosen_joke.get("text", "Шутка не найдена.")
+            else:
+                msg = "Нет шуток в базе данных."
+        except Exception as e:
+            logger.error(f"Ошибка при выборе шутки: {e}")
+            msg = "Произошла ошибка при попытке получить шутку."
+
         await event.reply(msg)
 
-    # Регистрируем help
     register_help("ping_echo", {
-        "Джанки, голос": "Ответ саркастичной фразой."
+        "Джанки, голос": "Ответ саркастичной фразой из базы данных."
     })
