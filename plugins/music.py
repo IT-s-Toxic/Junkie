@@ -43,7 +43,7 @@ def init(client):
 
         query = query_match.group(1).strip()
         if not query:
-            await event.reply("Пожалуйста, укажите название трека после команды.")
+            await event.reply("Укакажи название трека после команды.")
             return
 
         await event.reply(f"Ищу трек «{query}» на Яндекс.Музыке...")
@@ -51,32 +51,37 @@ def init(client):
         try:
             ym_client = get_yandex_client()
             results = ym_client.search(text=query, type_='track')
-            if not results.tracks.results:
-                await event.reply("Не удалось найти трек.")
-                return
+        except Exception as e:
+            logger.error(f"Ошибка при поиске трека: {e}")
+            await event.reply("Я не смог ничего найти по твоему запросу, сорян.")
+            return
 
+        if not results or not results.tracks or not results.tracks.results:
+            await event.reply("Не удалось найти трек.")
+            return
+
+        try:
             track = results.tracks.results[0]
             track_obj = ym_client.tracks(track.id)[0]
         except Exception as e:
-            logger.error(f"Ошибка при поиске трека: {e}")
-            await event.reply(f"Ошибка при поиске трека: {e}")
+            logger.error(f"Ошибка при получении трека: {e}")
+            await event.reply("Произошла ошибка при получении трека.")
             return
 
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
         file_path = os.path.join(DOWNLOAD_DIR, f"{track_obj.title}.mp3")
 
         try:
-            # Скачивание трека
             track_obj.download(filename=file_path)
+        except Exception as e:
+            logger.error(f"Ошибка при скачивании трека: {e}")
+            await event.reply("Произошла ошибка при скачивании трека.")
+            return
 
-            caption = f"Вот твой трек: {track_obj.title} - {track_obj.artists[0].name}"
+        caption = f"Вот твой трек: {track_obj.title} - {track_obj.artists[0].name}"
+        try:
             await client.send_file(event.chat_id, file_path, caption=caption, reply_to=event.id)
-
             os.remove(file_path)
         except Exception as e:
             logger.error(f"Ошибка при отправке трека: {e}")
-            await event.reply(f"Ошибка при отправке трека: {e}")
-
-    # Обработка, если токен не задан
-    if not YANDEX_TOKEN:
-        logger.warning("YANDEX_TOKEN не задан в vars.yaml. Команда поиска треков не будет работать.")
+            await event.reply("Произошла ошибка при отправке трека.")
