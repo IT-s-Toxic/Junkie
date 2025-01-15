@@ -1,28 +1,35 @@
 import re
 import logging
-from telethon import events, types
+from telethon import events, types, errors, functions
 from pymongo import MongoClient
 from utils.config import AUTHORIZED_USERS, MONGODB_URI, DB_NAME
 from utils.misc import register_help
 
 logger = logging.getLogger(__name__)
 
-delete_channel_messages = False
+# Регэкспы для команд
+ENABLE_PATTERN = re.compile(r"(?i)^джанки,\s*к\s*чёрту\s*маски\s*$")
+DISABLE_PATTERN = re.compile(r"(?i)^джанки,\s*пусть\s*прячутся\s*$")
 
 def init(client):
     register_help("channel_filter", {
-        "Джанки, к чёрту маски": "Включает удаление сообщений от каналов (только для AUTHORIZED_USERS).",
-        "Джанки, пусть прячутся": "Выключает удаление сообщений от каналов (только для AUTHORIZED_USERS)."
+        "Джанки, к чёрту маски": "Включает удаление сообщений от пользователей под масками каналов (только AUTHORIZED_USERS).",
+        "Джанки, пусть прячутся": "Выключает удаление сообщений от пользователей под масками каналов (только AUTHORIZED_USERS)."
     })
 
-    # Подключение к базе данных для получения шуток (если нужно)
+    # Подключение к MongoDB и коллекции
     mongo_client = MongoClient(MONGODB_URI)
     db = mongo_client[DB_NAME]
+    states_col = db["states"]
     jokes_col = db["jokes"]
 
-    @client.on(events.NewMessage(pattern=re.compile(r"(?i)^джанки,\s*к\s*чёрту\s*маски\s*$")))
+    # Инициализируем состояние плагина, если не существует
+    state = states_col.find_one({"plugin": "channel_filter"})
+    if state is None:
+        states_col.insert_one({"plugin": "channel_filter", "enabled": False})
+
+    @client.on(events.NewMessage(pattern=ENABLE_PATTERN))
     async def enable_channel_filter(event):
-        global delete_channel_messages
         if event.sender_id not in AUTHORIZED_USERS:
             try:
                 joke = await jokes_col.aggregate([{"$sample": {"size": 1}}]).to_list(length=1)
@@ -32,12 +39,11 @@ def init(client):
             await event.reply(response)
             return
 
-        delete_channel_messages = True
-        await event.reply("Удаление сообщений от каналов включено.")
+        states_col.update_one({"plugin": "channel_filter"}, {"$set": {"enabled": True}})
+        await event.reply("Удаление сообщений от пользователей под масками каналов включено.")
 
-    @client.on(events.NewMessage(pattern=re.compile(r"(?i)^джанки,\s*пусть\s*прячутся\s*$")))
+    @client.on(events.NewMessage(pattern=DISABLE_PATTERN))
     async def disable_channel_filter(event):
-        global delete_channel_messages
         if event.sender_id not in AUTHORIZED_USERS:
             try:
                 joke = await jokes_col.aggregate([{"$sample": {"size": 1}}]).to_list(length=1)
@@ -47,17 +53,18 @@ def init(client):
             await event.reply(response)
             return
 
-        delete_channel_messages = False
-        await event.reply("Удаление сообщений от каналов выключено.")
+        states_col.update_one({"plugin": "channel_filter"}, {"$set": {"enabled": False}})
+        await event.reply("Удаление сообщений от пользователей под масками каналов выключено.")
 
     @client.on(events.NewMessage)
     async def channel_message_filter(event):
-        global delete_channel_messages
-        if not delete_channel_messages:
+        # Проверяем состояние плагина из базы
+        state = states_col.find_one({"plugin": "channel_filter"})
+        if not state or not state.get("enabled", False):
             return
 
         message = event.message
-        # Проверяем, отправлено ли сообщение от имени канала
+        # Проверяем, что сообщение отправлено от канала
         if isinstance(message.from_id, types.PeerChannel):
             try:
                 await client.delete_messages(message.chat_id, [message.id])
