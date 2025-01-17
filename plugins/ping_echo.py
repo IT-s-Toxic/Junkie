@@ -14,7 +14,10 @@ def init(client):
     db = mongo_client[DB_NAME]
     jokes_col = db["jokes"]
 
-    @client.on(events.NewMessage(pattern=re.compile(r"(?i)^джанки,\s*голос\s*$")))
+    # Регулярное выражение для команд с обязательным префиксом "Джанки, "
+    command_pattern = re.compile(r"(?i)^джанки,\s*(голос|шалом|привет|хай)\s*$")
+
+    @client.on(events.NewMessage(pattern=command_pattern))
     async def voice_handler(event):
         try:
             # Получаем все шутки из коллекции и выбираем случайную
@@ -31,5 +34,6 @@ def init(client):
         await event.reply(msg)
 
     register_help("ping_echo", {
-        "Джанки, голос": "Ответ саркастичной фразой из базы данных."
+        "Джанки, голос / шалом / привет / хай":
+            "Ответ саркастичной фразой из базы данных."
     })
